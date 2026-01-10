@@ -1,0 +1,57 @@
+services:
+  # PostgreSQL
+  postgres:
+    image: postgres:15-alpine
+    container_name: pg_gateway
+    environment:
+      POSTGRES_DB: payment_gateway
+      POSTGRES_USER: gateway_user
+      POSTGRES_PASSWORD: gateway_pass
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+  # Redis
+  redis:
+    image: redis:latest
+    container_name: redis_gateway
+
+  # Backend
+  backend:
+    build: ./backend
+    container_name: backend_gateway
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    depends_on:
+      - postgres
+      - redis
+
+  # Dashboard frontend
+  dashboard:
+    build:
+      context: ./frontend/dashboard-vite
+      dockerfile: Dockerfile
+    container_name: dashboard_gateway
+    env_file:
+      - ./frontend/dashboard-vite/.env
+    ports:
+      - "3000:80"   # container runs Nginx on 80
+    depends_on:
+      - backend
+
+  # Checkout frontend
+  checkout:
+    build:
+      context: ./checkout
+      dockerfile: Dockerfile
+    container_name: checkout_gateway
+    env_file:
+      - ./checkout/.env
+    ports:
+      - "3001:80"
+    depends_on:
+      - backend
+
+volumes:
+  pg_data:

@@ -1,0 +1,36 @@
+# Node.js
+node_modules/
+npm-debug.log
+yarn-error.log
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Logs
+logs/
+*.log
+*.log.*
+
+# Build outputs
+dist/
+build/
+coverage/
+
+# Docker
+*.env
+docker-compose.override.yml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# VSCode
+.vscode/
+
+# Frontend / React
+checkout/node_modules/
+frontend/dashboard-vite/node_modules/
+checkout/dist/
+frontend/dashboard-vite/dist/
