@@ -1,297 +1,219 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { getOrderPublic, createPayment, getPayment } from "../api/api";
+import { createPayment, getOrderPublic, getPayment } from "../api/api";
 
 export default function Checkout() {
   const [searchParams] = useSearchParams();
-  const orderId = searchParams.get("order_id");
+  const orderIdParam = searchParams.get("order_id");
 
   const [order, setOrder] = useState(null);
-  const [showForm, setShowForm] = useState(null); // 'upi' | 'card'
+  const [selectedMethod, setSelectedMethod] = useState("");
   const [processing, setProcessing] = useState(false);
-  const [success, setSuccess] = useState(null);
-  const [error, setError] = useState(null);
+  const [successPaymentId, setSuccessPaymentId] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+  const pollRef = useRef(null);
 
   useEffect(() => {
-    if (!orderId) return;
+    if (!orderIdParam) {
+      setErrorMessage("Order not found");
+      return;
+    }
 
-    getOrderPublic(orderId)
-      .then((res) => setOrder(res.data))
-      .catch(() => setError("Order not found"));
-  }, [orderId]);
+    getOrderPublic(orderIdParam)
+      .then((response) => {
+        setOrder(response.data);
+        setErrorMessage("");
+      })
+      .catch(() => {
+        setErrorMessage("Order not found");
+      });
 
-  const handlePayment = async (method, paymentDetails) => {
-    if (!order) return;
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, [orderIdParam]);
 
+  const displayAmount = useMemo(() => {
+    const amount = Number(order?.amount || 0);
+    return `₹${(amount / 100).toFixed(2)}`;
+  }, [order]);
+
+  const payButtonLabel = useMemo(() => {
+    const amount = Number(order?.amount || 0);
+    return `Pay ₹${Math.round(amount / 100)}`;
+  }, [order]);
+
+  function resetStates() {
+    setProcessing(false);
+    setSuccessPaymentId("");
+    setErrorMessage("");
+  }
+
+  async function startPolling(paymentId) {
+    pollRef.current = setInterval(async () => {
+      try {
+        const response = await getPayment(paymentId);
+        const status = response.data.status;
+        if (status === "success") {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+          setProcessing(false);
+          setSuccessPaymentId(response.data.id);
+          setErrorMessage("");
+        }
+        if (status === "failed") {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+          setProcessing(false);
+          setSuccessPaymentId("");
+          setErrorMessage(response.data.error_description || "Payment could not be processed");
+        }
+      } catch (error) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+        setProcessing(false);
+        setSuccessPaymentId("");
+        setErrorMessage("Payment could not be processed");
+      }
+    }, 2000);
+  }
+
+  async function submitUpi(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const vpa = form.vpa.value;
+
+    resetStates();
     setProcessing(true);
-    setSuccess(null);
-    setError(null);
-
-    const body = { order_id: order.id, method };
-    if (method === "upi") body.vpa = paymentDetails.vpa;
-    if (method === "card") body.card = paymentDetails;
 
     try {
-      const res = await createPayment(body);
-      const paymentId = res.data.id;
-
-      const poll = setInterval(async () => {
-        const statusRes = await getPayment(paymentId);
-        if (statusRes.data.status !== "processing") {
-          clearInterval(poll);
-          setProcessing(false);
-
-          if (statusRes.data.status === "success") {
-            setSuccess(statusRes.data);
-          } else {
-            setError("Payment failed");
-          }
-        }
-      }, 2000);
-    } catch {
+      const createResponse = await createPayment({
+        order_id: order.id,
+        method: "upi",
+        vpa,
+      });
+      await startPolling(createResponse.data.id);
+    } catch (error) {
       setProcessing(false);
-      setError("Payment failed");
+      setErrorMessage(error?.response?.data?.error?.description || "Payment could not be processed");
     }
-  };
+  }
+
+  async function submitCard(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const expiry = String(form.expiry.value || "").split("/");
+
+    resetStates();
+    setProcessing(true);
+
+    try {
+      const createResponse = await createPayment({
+        order_id: order.id,
+        method: "card",
+        card: {
+          number: form.number.value,
+          expiry_month: expiry[0] || "",
+          expiry_year: expiry[1] || "",
+          cvv: form.cvv.value,
+          holder_name: form.cardholder.value,
+        },
+      });
+      await startPolling(createResponse.data.id);
+    } catch (error) {
+      setProcessing(false);
+      setErrorMessage(error?.response?.data?.error?.description || "Payment could not be processed");
+    }
+  }
 
   return (
-    <div
-      data-test-id="checkout-container"
-      style={{
-        minHeight: "100vh",
-        background: "linear-gradient(135deg, #42a5f5, #478ed1)",
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        fontFamily: "Segoe UI, sans-serif",
-        padding: "20px",
-      }}
-    >
-      <div
-        style={{
-          background: "#fff",
-          padding: "28px",
-          borderRadius: "14px",
-          width: "100%",
-          maxWidth: "420px",
-          boxShadow: "0 6px 20px rgba(0,0,0,0.15)",
-        }}
-      >
-        {!order && !error && <div style={{ textAlign: "center" }}>Loading order...</div>}
+    <div className="checkout-shell">
+      <div data-testid="checkout-container" className="checkout-card">
+        <div data-testid="order-summary" className="order-summary">
+          <h2 className="checkout-title">Complete Payment</h2>
+          <div>
+            <span>Amount: </span>
+            <span data-testid="order-amount">{displayAmount}</span>
+          </div>
+          <div>
+            <span>Order ID: </span>
+            <span data-testid="order-id">{order?.id || orderIdParam || ""}</span>
+          </div>
+        </div>
 
-        {order && (
-          <>
-            {/* ORDER SUMMARY */}
-            <div
-              data-test-id="order-summary"
-              style={{
-                marginBottom: "20px",
-                borderBottom: "1px solid #eee",
-                paddingBottom: "12px",
-                textAlign: "center",
-              }}
-            >
-              <h2 style={{ marginBottom: "10px", color: "#1976d2" }}>Complete Payment</h2>
-              <div style={{ fontSize: "14px", color: "#555" }}>
-                <div>
-                  Amount:{" "}
-                  <strong data-test-id="order-amount">₹500</strong>
-                </div>
-                <div>
-                  Order ID:{" "}
-                  <span data-test-id="order-id">{order.id}</span>
-                </div>
-              </div>
-            </div>
+        <div data-testid="payment-methods" className="method-row">
+          <button
+            data-testid="method-upi"
+            data-method="upi"
+            className={`method-btn ${selectedMethod === "upi" ? "active" : ""}`}
+            onClick={() => setSelectedMethod("upi")}
+          >
+            UPI
+          </button>
+          <button
+            data-testid="method-card"
+            data-method="card"
+            className={`method-btn ${selectedMethod === "card" ? "active" : ""}`}
+            onClick={() => setSelectedMethod("card")}
+          >
+            Card
+          </button>
+        </div>
 
-            {/* PAYMENT METHODS */}
-            <div
-              data-test-id="payment-methods"
-              style={{
-                display: "flex",
-                gap: "12px",
-                marginBottom: "18px",
-              }}
-            >
-              <button
-                data-test-id="method-upi"
-                onClick={() => setShowForm("upi")}
-                style={methodButtonStyle(showForm === "upi")}
-              >
-                UPI
-              </button>
-              <button
-                data-test-id="method-card"
-                onClick={() => setShowForm("card")}
-                style={methodButtonStyle(showForm === "card")}
-              >
-                Card
-              </button>
-            </div>
+        <form
+          data-testid="upi-form"
+          className="method-form"
+          style={{ display: selectedMethod === "upi" ? "block" : "none" }}
+          onSubmit={submitUpi}
+        >
+          <input data-testid="vpa-input" name="vpa" placeholder="username@bank" type="text" required className="input" />
+          <button data-testid="pay-button" type="submit" className="pay-button">{payButtonLabel}</button>
+        </form>
 
-            {/* UPI FORM */}
-            {showForm === "upi" && (
-              <form
-                data-test-id="upi-form"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  handlePayment("upi", { vpa: e.target.vpa.value });
-                }}
-              >
-                <input
-                  data-test-id="vpa-input"
-                  name="vpa"
-                  placeholder="username@bank"
-                  required
-                  style={inputStyle}
-                />
-                <button
-                  data-test-id="pay-button"
-                  type="submit"
-                  style={{ ...payButtonStyle, display: "block", margin: "0 auto" }}
-                >
-                  Pay ₹500
-                </button>
-              </form>
-            )}
+        <form
+          data-testid="card-form"
+          className="method-form"
+          style={{ display: selectedMethod === "card" ? "block" : "none" }}
+          onSubmit={submitCard}
+        >
+          <input data-testid="card-number-input" name="number" placeholder="Card Number" type="text" required className="input" />
+          <input data-testid="expiry-input" name="expiry" placeholder="MM/YY" type="text" required className="input" />
+          <input data-testid="cvv-input" name="cvv" placeholder="CVV" type="text" required className="input" />
+          <input data-testid="cardholder-name-input" name="cardholder" placeholder="Name on Card" type="text" required className="input" />
+          <button data-testid="pay-button" type="submit" className="pay-button">{payButtonLabel}</button>
+        </form>
 
-            {/* CARD FORM */}
-            {showForm === "card" && (
-              <form
-                data-test-id="card-form"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  const card = {
-                    number: e.target.number.value,
-                    expiry_month: e.target.expiry.value.split("/")[0],
-                    expiry_year: e.target.expiry.value.split("/")[1],
-                    cvv: e.target.cvv.value,
-                    holder_name: e.target.name.value,
-                  };
-                  handlePayment("card", card);
-                }}
-              >
-                <input
-                  data-test-id="card-number-input"
-                  name="number"
-                  placeholder="Card Number"
-                  required
-                  style={inputStyle}
-                />
-                <input
-                  data-test-id="expiry-input"
-                  name="expiry"
-                  placeholder="MM/YY"
-                  required
-                  style={inputStyle}
-                />
-                <input
-                  data-test-id="cvv-input"
-                  name="cvv"
-                  placeholder="CVV"
-                  required
-                  style={inputStyle}
-                />
-                <input
-                  data-test-id="cardholder-name-input"
-                  name="name"
-                  placeholder="Name on Card"
-                  required
-                  style={inputStyle}
-                />
-                <button
-                  data-test-id="pay-button"
-                  type="submit"
-                  style={{ ...payButtonStyle, display: "block", margin: "0 auto" }}
-                >
-                  Pay ₹500
-                </button>
-              </form>
-            )}
+        <div data-testid="processing-state" className="state-box" style={{ display: processing ? "block" : "none" }}>
+          <div className="spinner"></div>
+          <span data-testid="processing-message">Processing payment...</span>
+        </div>
 
-            {/* STATES */}
-            {processing && (
-              <div
-                data-test-id="processing-state"
-                style={{
-                  marginTop: "15px",
-                  color: "#f39c12",
-                  textAlign: "center",
-                  fontWeight: "500",
-                }}
-              >
-                <span data-test-id="processing-message">Processing payment...</span>
-              </div>
-            )}
+        <div data-testid="success-state" className="state-box state-success" style={{ display: successPaymentId ? "block" : "none" }}>
+          <h2>Payment Successful!</h2>
+          <div>
+            <span>Payment ID: </span>
+            <span data-testid="payment-id">{successPaymentId}</span>
+          </div>
+          <span data-testid="success-message">Your payment has been processed successfully</span>
+        </div>
 
-            {success && (
-              <div
-                data-test-id="success-state"
-                style={{
-                  marginTop: "15px",
-                  color: "green",
-                  textAlign: "center",
-                  fontWeight: "600",
-                }}
-              >
-                <div data-test-id="payment-id">{success.id}</div>
-                <div data-test-id="success-message">Payment Successful 🎉</div>
-              </div>
-            )}
-
-            {error && (
-              <div
-                data-test-id="error-state"
-                style={{
-                  marginTop: "15px",
-                  color: "red",
-                  textAlign: "center",
-                  fontWeight: "500",
-                }}
-              >
-                <span data-test-id="error-message">{error}</span>
-              </div>
-            )}
-          </>
-        )}
+        <div data-testid="error-state" className="state-box state-error" style={{ display: errorMessage ? "block" : "none" }}>
+          <h2>Payment Failed</h2>
+          <span data-testid="error-message">{errorMessage || "Payment could not be processed"}</span>
+          <button
+            data-testid="retry-button"
+            type="button"
+            className="method-btn"
+            onClick={() => {
+              setErrorMessage("");
+              setSuccessPaymentId("");
+              setProcessing(false);
+            }}
+          >
+            Try Again
+          </button>
+        </div>
       </div>
     </div>
   );
 }
-
-/* =======================
-   STYLES
-======================= */
-const inputStyle = {
-  width: "100%",
-  padding: "12px",
-  marginBottom: "12px",
-  borderRadius: "8px",
-  border: "1px solid #ccc",
-  fontSize: "14px",
-  transition: "border 0.2s ease",
-};
-
-const payButtonStyle = {
-  width: "100%",
-  padding: "12px",
-  background: "linear-gradient(135deg, #1976d2, #1565c0)",
-  color: "#fff",
-  border: "none",
-  borderRadius: "8px",
-  fontSize: "15px",
-  fontWeight: "600",
-  cursor: "pointer",
-  transition: "background 0.3s ease",
-};
-
-const methodButtonStyle = (active) => ({
-  flex: 1,
-  padding: "12px",
-  borderRadius: "8px",
-  border: active ? "2px solid #1976d2" : "1px solid #ccc",
-  background: active ? "#eaf2ff" : "#f9f9f9",
-  cursor: "pointer",
-  fontWeight: active ? "600" : "500",
-  transition: "all 0.2s ease",
-});

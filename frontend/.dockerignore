@@ -1,0 +1,7 @@
+node_modules
+dashboard-vite/node_modules
+dashboard-vite/dist
+npm-debug.log
+.env
+.git
+.gitignore

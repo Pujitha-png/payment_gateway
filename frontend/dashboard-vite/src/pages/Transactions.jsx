@@ -1,91 +1,47 @@
 import { useEffect, useState } from "react";
-import API from "../api/api";
+import { getPayments } from "../api/api";
 
 export default function Transactions() {
   const [payments, setPayments] = useState([]);
 
   useEffect(() => {
-    API.get("/payments")
+    getPayments()
       .then((res) => setPayments(res.data || []))
-      .catch(console.error);
+      .catch(() => setPayments([]));
   }, []);
 
   return (
-    <div style={{ maxWidth: "900px", margin: "30px auto", padding: "20px" }}>
-      <h2 style={{ textAlign: "center", marginBottom: "20px" }}>Transactions</h2>
-      <div style={{ overflowX: "auto" }}>
-        <table
-          data-test-id="transactions-table"
-          style={{
-            width: "100%",
-            borderCollapse: "collapse",
-            boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
-            border: "1px solid #ddd",
-          }}
-        >
-          <thead>
-            <tr style={{ backgroundColor: "#007bff", color: "#fff" }}>
-              <th style={{ padding: "12px", textAlign: "left", border: "1px solid #ddd" }}>Payment ID</th>
-              <th style={{ padding: "12px", textAlign: "left", border: "1px solid #ddd" }}>Order ID</th>
-              <th style={{ padding: "12px", textAlign: "right", border: "1px solid #ddd" }}>Amount</th>
-              <th style={{ padding: "12px", textAlign: "center", border: "1px solid #ddd" }}>Method</th>
-              <th style={{ padding: "12px", textAlign: "center", border: "1px solid #ddd" }}>Status</th>
-              <th style={{ padding: "12px", textAlign: "center", border: "1px solid #ddd" }}>Created</th>
-            </tr>
-          </thead>
-          <tbody>
-            {payments.length === 0 ? (
+    <div className="page fade-in">
+      <div className="layout-wrap wide">
+        <h2 className="page-title">Transactions</h2>
+        <div className="table-wrap">
+          <table data-testid="transactions-table" className="table">
+            <thead>
               <tr>
-                <td colSpan={6} style={{ textAlign: "center", padding: "20px", border: "1px solid #ddd" }}>
-                  No transactions found.
-                </td>
+                <th>Payment ID</th>
+                <th>Order ID</th>
+                <th>Amount</th>
+                <th>Method</th>
+                <th>Status</th>
+                <th>Created</th>
               </tr>
-            ) : (
-              payments.map((p) => (
-                <tr
-                  key={p.id}
-                  data-test-id="transaction-row"
-                  data-payment-id={p.id}
-                  style={{
-                    borderBottom: "1px solid #ddd",
-                    backgroundColor: "#fff",
-                    transition: "background-color 0.2s",
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f9f9f9")}
-                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#fff")}
-                >
-                  <td data-test-id="payment-id" style={{ padding: "10px", border: "1px solid #ddd" }}>
-                    {p.id}
+            </thead>
+            <tbody>
+              {payments.map((payment) => (
+                <tr key={payment.id} data-testid="transaction-row" data-payment-id={payment.id}>
+                  <td data-testid="payment-id">{payment.id}</td>
+                  <td data-testid="order-id">{payment.order_id}</td>
+                  <td data-testid="amount">₹{Math.round(Number(payment.amount || 0) / 100).toLocaleString("en-IN")}</td>
+                  <td data-testid="method">{payment.method}</td>
+                  <td data-testid="status">
+                    <span className={`tag ${payment.status}`}>{payment.status}</span>
                   </td>
-                  <td data-test-id="order-id" style={{ padding: "10px", border: "1px solid #ddd" }}>
-                    {p.order_id}
-                  </td>
-                  <td data-test-id="amount" style={{ padding: "10px", textAlign: "right", border: "1px solid #ddd" }}>
-                    ₹{p.amount}
-                  </td>
-                  <td data-test-id="method" style={{ padding: "10px", textAlign: "center", border: "1px solid #ddd" }}>
-                    {p.method.toUpperCase()}
-                  </td>
-                  <td
-                    data-test-id="status"
-                    style={{
-                      padding: "10px",
-                      textAlign: "center",
-                      color: p.status === "success" ? "green" : p.status === "failed" ? "red" : "#555",
-                      fontWeight: "bold",
-                      border: "1px solid #ddd",
-                    }}
-                  >
-                    {p.status.toUpperCase()}
-                  </td>
-                  <td data-test-id="created-at" style={{ padding: "10px", textAlign: "center", border: "1px solid #ddd" }}>
-                    {new Date(p.created_at).toLocaleString()}
-                  </td>
+                  <td data-testid="created-at">{new Date(payment.created_at).toLocaleString("sv-SE")}</td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

@@ -1,29 +1,13 @@
-# Payment Gateway API Specification
+# API Documentation
 
-This document defines all API endpoints for the Payment Gateway system.
-All endpoints **must be implemented exactly as specified**.
+Base URL: `http://localhost:8000`
 
----
-
-## Base URL
-
-```
-http://localhost:8000
-```
-
----
-
-## 1. Health Check Endpoint
+## 1) Health
 
 ### `GET /health`
+No auth.
 
-Checks whether the application and its dependencies are operational.
-
-### Authentication
-
-* Not required
-
-### Success Response (200)
+Success (`200`):
 
 ```json
 {
@@ -33,40 +17,13 @@ Checks whether the application and its dependencies are operational.
 }
 ```
 
-### Enhanced Health Check (Deliverable 2)
+## 2) Authentication (Protected Endpoints)
 
-```json
-{
-  "status": "healthy",
-  "database": "connected",
-  "redis": "connected",
-  "worker": "running",
-  "timestamp": "2024-01-15T10:30:00Z"
-}
-```
+Headers required:
+- `X-Api-Key: key_test_abc123`
+- `X-Api-Secret: secret_test_xyz789`
 
-### Response Fields
-
-* **status**: Always `"healthy"` when service is operational
-* **database**: `"connected"` or `"disconnected"`
-* **redis**: `"connected"` or `"disconnected"` (Deliverable 2)
-* **worker**: `"running"` or `"stopped"` (Deliverable 2)
-* **timestamp**: ISO 8601 formatted timestamp
-
----
-
-## Authentication
-
-All private endpoints require authentication using API credentials.
-
-### Required Headers
-
-```
-X-Api-Key: key_test_abc123
-X-Api-Secret: secret_test_xyz789
-```
-
-### Invalid Credentials Response
+Invalid auth (`401`):
 
 ```json
 {
@@ -77,273 +34,76 @@ X-Api-Secret: secret_test_xyz789
 }
 ```
 
----
-
-## Standard Error Codes
-
-| Code                       | Description                     |
-| -------------------------- | ------------------------------- |
-| AUTHENTICATION_ERROR       | Invalid API credentials         |
-| BAD_REQUEST_ERROR          | Validation errors               |
-| NOT_FOUND_ERROR            | Resource not found              |
-| PAYMENT_FAILED             | Payment processing failed       |
-| INVALID_VPA                | VPA format invalid              |
-| INVALID_CARD               | Card validation failed          |
-| EXPIRED_CARD               | Card expiry date invalid        |
-| INSUFFICIENT_REFUND_AMOUNT | Refund exceeds available amount |
-
----
-
-## 2. Create Order
+## 3) Orders
 
 ### `POST /api/v1/orders`
+Create order.
 
-Creates a new payment order.
-
-### Authentication
-
-* Required
-
-### Headers
-
-```
-X-Api-Key: key_test_abc123
-X-Api-Secret: secret_test_xyz789
-Content-Type: application/json
-```
-
-### Request Body
+Body:
 
 ```json
 {
   "amount": 50000,
   "currency": "INR",
   "receipt": "receipt_123",
-  "notes": {
-    "customer_name": "John Doe"
-  }
+  "notes": {"customer_name": "John Doe"}
 }
 ```
 
-### Validation Rules
+Success (`201`) includes:
+- `id` (format: `order_` + 16 alphanumeric)
+- `merchant_id`, `amount`, `currency`, `status`, timestamps
 
-* **amount**: Integer ≥ 100 (stored in paise)
-* **currency**: Optional, defaults to `"INR"`
-* **receipt**: Optional string
-* **notes**: Optional JSON object
+Validation:
+- `amount` must be integer and `>= 100`
+- `currency` must be 3 characters
+- `notes` must be JSON object when provided
 
-### Success Response (201)
+### `GET /api/v1/orders/:order_id`
+Fetch authenticated merchant order.
 
-```json
-{
-  "id": "order_NXhj67fGH2jk9mPq",
-  "merchant_id": "550e8400-e29b-41d4-a716-446655440000",
-  "amount": 50000,
-  "currency": "INR",
-  "receipt": "receipt_123",
-  "notes": {
-    "customer_name": "John Doe"
-  },
-  "status": "created",
-  "created_at": "2024-01-15T10:30:00Z"
-}
-```
+### `GET /api/v1/orders/:order_id/public`
+Public order fetch for checkout page.
 
-### Error Response (400)
+Success (`200`) returns:
+- `id`, `amount`, `currency`, `status`
 
-```json
-{
-  "error": {
-    "code": "BAD_REQUEST_ERROR",
-    "description": "amount must be at least 100"
-  }
-}
-```
-
----
-
-## 3. Get Order
-
-### `GET /api/v1/orders/{order_id}`
-
-Retrieves an order belonging to the authenticated merchant.
-
-### Authentication
-
-* Required
-
-### Success Response (200)
-
-```json
-{
-  "id": "order_NXhj67fGH2jk9mPq",
-  "merchant_id": "550e8400-e29b-41d4-a716-446655440000",
-  "amount": 50000,
-  "currency": "INR",
-  "receipt": "receipt_123",
-  "notes": {},
-  "status": "created",
-  "created_at": "2024-01-15T10:30:00Z",
-  "updated_at": "2024-01-15T10:30:00Z"
-}
-```
-
-### Error Response (404)
-
-```json
-{
-  "error": {
-    "code": "NOT_FOUND_ERROR",
-    "description": "Order not found"
-  }
-}
-```
-
----
-
-## 4. Create Payment
+## 4) Payments
 
 ### `POST /api/v1/payments`
+Create payment for authenticated merchant.
 
-Creates and processes a payment for an order.
+### `GET /api/v1/payments`
+List authenticated merchant payments.
 
-### Authentication
+### `GET /api/v1/payments/:payment_id`
+Fetch authenticated merchant payment.
 
-* Required
+### `POST /api/v1/payments/public`
+Public payment creation for checkout page.
 
-### Headers
+Supported methods:
+- `upi` with `vpa`
+- `card` with `card.number`, `expiry_month`, `expiry_year`, `cvv`, `holder_name`
 
-```
-X-Api-Key: key_test_abc123
-X-Api-Secret: secret_test_xyz789
-Content-Type: application/json
-```
+Status flow:
+- `processing` → `success` or `failed`
 
-### UPI Payment Request
+Validation implemented:
+- VPA regex validation
+- Card Luhn validation
+- Card network detection (`visa`, `mastercard`, `amex`, `rupay`, `unknown`)
+- Expiry validation (future/current month)
 
-```json
-{
-  "order_id": "order_NXhj67fGH2jk9mPq",
-  "method": "upi",
-  "vpa": "user@paytm"
-}
-```
+### `GET /api/v1/payments/:payment_id/public`
+Public payment status fetch for checkout polling.
 
-### Card Payment Request
-
-```json
-{
-  "order_id": "order_NXhj67fGH2jk9mPq",
-  "method": "card",
-  "card": {
-    "number": "4111111111111111",
-    "expiry_month": "12",
-    "expiry_year": "2025",
-    "cvv": "123",
-    "holder_name": "John Doe"
-  }
-}
-```
-
-### Success Response (201 – UPI)
-
-```json
-{
-  "id": "pay_H8sK3jD9s2L1pQr",
-  "order_id": "order_NXhj67fGH2jk9mPq",
-  "amount": 50000,
-  "currency": "INR",
-  "method": "upi",
-  "vpa": "user@paytm",
-  "status": "processing",
-  "created_at": "2024-01-15T10:31:00Z"
-}
-```
-
-### Success Response (201 – Card)
-
-```json
-{
-  "id": "pay_H8sK3jD9s2L1pQr",
-  "order_id": "order_NXhj67fGH2jk9mPq",
-  "amount": 50000,
-  "currency": "INR",
-  "method": "card",
-  "card_network": "visa",
-  "card_last4": "1111",
-  "status": "processing",
-  "created_at": "2024-01-15T10:31:00Z"
-}
-```
-
-### Payment Processing Flow
-
-* Payments are created directly with status `processing`
-* Status transitions:
-
-  * `processing → success`
-  * `processing → failed`
-* `created` state is skipped
-
----
-
-## Test Mode (Required)
-
-Controlled via environment variables:
-
-```
-TEST_MODE=true
-TEST_PAYMENT_SUCCESS=true
-TEST_PROCESSING_DELAY=1000
-```
-
-### Behavior
-
-* Deterministic success/failure
-* Fixed processing delay
-* Required for automated evaluation
-
----
-
-## 5. Get Payment
-
-### `GET /api/v1/payments/{payment_id}`
-
-Retrieves payment details.
-
-### Authentication
-
-* Required
-
-### Success Response (200)
-
-```json
-{
-  "id": "pay_H8sK3jD9s2L1pQr",
-  "order_id": "order_NXhj67fGH2jk9mPq",
-  "amount": 50000,
-  "currency": "INR",
-  "method": "upi",
-  "vpa": "user@paytm",
-  "status": "success",
-  "created_at": "2024-01-15T10:31:00Z",
-  "updated_at": "2024-01-15T10:31:10Z"
-}
-```
-
----
-
-## 6. Test Endpoints (Required for Evaluation)
+## 5) Test Endpoint
 
 ### `GET /api/v1/test/merchant`
+No auth. Confirms seeded merchant.
 
-Returns details of the seeded test merchant.
-
-### Authentication
-
-* Not required
-
-### Success Response (200)
+Success (`200`):
 
 ```json
 {
@@ -354,13 +114,12 @@ Returns details of the seeded test merchant.
 }
 ```
 
-### Error Response (404)
+## Error Codes Used
 
-```json
-{
-  "error": {
-    "code": "NOT_FOUND_ERROR",
-    "description": "Test merchant not found"
-  }
-}
-```
+- `AUTHENTICATION_ERROR`
+- `BAD_REQUEST_ERROR`
+- `NOT_FOUND_ERROR`
+- `INVALID_VPA`
+- `INVALID_CARD`
+- `EXPIRED_CARD`
+- `PAYMENT_FAILED`

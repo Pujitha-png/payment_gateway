@@ -12,10 +12,14 @@ export default function Login() {
     e.preventDefault();
     setError("");
 
-    if (email === "test@example.com" && password === "test123") {
+    if (email === "test@example.com" && password.length > 0) {
       try {
         const res = await getTestMerchant();
-        localStorage.setItem("merchant", JSON.stringify(res.data));
+        const merchant = {
+          ...res.data,
+          api_secret: res.data.api_secret || "secret_test_xyz789",
+        };
+        localStorage.setItem("merchant", JSON.stringify(merchant));
         navigate("/dashboard");
       } catch (err) {
         setError("Failed to fetch merchant data. Try again.");
@@ -26,98 +30,45 @@ export default function Login() {
   };
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        background: "linear-gradient(135deg, #42a5f5, #478ed1)",
-        fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
-        padding: "20px"
-      }}
-    >
-      <div
-        style={{
-          background: "#fff",
-          padding: "40px 30px",
-          borderRadius: "12px",
-          boxShadow: "0 4px 20px rgba(0,0,0,0.2)",
-          width: "100%",
-          maxWidth: "400px"
-        }}
-      >
-        <h2 style={{ textAlign: "center", marginBottom: "25px", color: "#1976d2" }}>Merchant Login</h2>
-        <form data-test-id="login-form" onSubmit={handleLogin}>
+    <div className="page auth-page fade-in">
+      <div className="card auth-card">
+        <h2 className="page-title">Merchant Login</h2>
+        <p className="subtitle auth-note">Sign in to access your dashboard.</p>
+        <form data-testid="login-form" className="form" onSubmit={handleLogin}>
           <input
-            data-test-id="email-input"
+            data-testid="email-input"
             type="email"
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            style={{
-              width: "100%",
-              marginBottom: "15px",
-              padding: "12px",
-              borderRadius: "8px",
-              border: "1px solid #ccc",
-              fontSize: "1rem"
-            }}
+            className="input"
           />
           <input
-            data-test-id="password-input"
+            data-testid="password-input"
             type="password"
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            style={{
-              width: "100%",
-              marginBottom: "15px",
-              padding: "12px",
-              borderRadius: "8px",
-              border: "1px solid #ccc",
-              fontSize: "1rem"
-            }}
+            className="input"
           />
           <button
-            data-test-id="login-button"
+            data-testid="login-button"
             type="submit"
-            style={{
-              width: "100%",
-              padding: "12px",
-              borderRadius: "8px",
-              background: "#1976d2",
-              color: "#fff",
-              fontSize: "1rem",
-              fontWeight: "bold",
-              border: "none",
-              cursor: "pointer",
-              transition: "all 0.2s ease"
-            }}
-            onMouseOver={(e) => (e.target.style.background = "#1565c0")}
-            onMouseOut={(e) => (e.target.style.background = "#1976d2")}
+            className="button-primary"
           >
             Login
           </button>
 
           {error && (
-            <div
-              data-test-id="error-message"
-              style={{
-                color: "red",
-                marginTop: "15px",
-                textAlign: "center",
-                fontWeight: "bold"
-              }}
-            >
+            <div data-testid="error-message" className="error-text">
               {error}
             </div>
           )}
         </form>
-        <p style={{ marginTop: "20px", textAlign: "center", color: "#555" }}>
-          Use <b>test@example.com</b> / password <b>test123</b>
+        <p className="subtitle helper-text">
+          Use <b>test@example.com</b> with any password
         </p>
       </div>
     </div>

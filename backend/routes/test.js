@@ -14,7 +14,7 @@ router.get('/merchant', async (req, res) => {
     res.json({ ...result.rows[0], seeded: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: { code: "SERVER_ERROR", description: "Internal server error" } });
+    res.status(400).json({ error: { code: "BAD_REQUEST_ERROR", description: "Unable to fetch test merchant" } });
   }
 });
 

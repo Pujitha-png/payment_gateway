@@ -1,116 +1,59 @@
-# Database Schema Specification
+# Database Schema
 
-This document defines the **exact database schema** required for the Payment Gateway system.
-All tables, columns, data types, constraints, indexes, and seeding rules **must be implemented exactly as specified**.
+This project uses PostgreSQL with three core tables and required indexes.
 
----
+## `merchants`
 
-## Merchants Table
+- `id` UUID primary key
+- `name` varchar(255) not null
+- `email` varchar(255) unique not null
+- `api_key` varchar(64) unique not null
+- `api_secret` varchar(64) not null
+- `webhook_url` text nullable
+- `is_active` boolean default true
+- `created_at`, `updated_at` timestamp default current time
 
-Stores merchant accounts used for API authentication and payment processing.
+## `orders`
 
-### Table: `merchants`
+- `id` varchar(64) primary key, constrained to `order_` + 16 alphanumeric
+- `merchant_id` UUID not null, FK → `merchants(id)`
+- `amount` integer not null, check `>= 100`
+- `currency` varchar(3) default `INR`
+- `receipt` varchar(255) nullable
+- `notes` JSONB nullable
+- `status` varchar(20) default `created`
+- `created_at`, `updated_at` timestamp default current time
 
-| Column      | Type         | Constraints                 |
-| ----------- | ------------ | --------------------------- |
-| id          | UUID         | Primary Key, auto-generated |
-| name        | VARCHAR(255) | Required                    |
-| email       | VARCHAR(255) | Required, **Unique**        |
-| api_key     | VARCHAR(64)  | Required, **Unique**        |
-| api_secret  | VARCHAR(64)  | Required                    |
-| webhook_url | TEXT         | Optional                    |
-| is_active   | BOOLEAN      | Defaults to `true`          |
-| created_at  | TIMESTAMP    | Auto-set to current time    |
-| updated_at  | TIMESTAMP    | Auto-set to current time    |
+## `payments`
 
----
-
-## Orders Table
-
-Stores payment orders created by merchants.
-
-### Table: `orders`
-
-| Column      | Type         | Constraints                                                |
-| ----------- | ------------ | ---------------------------------------------------------- |
-| id          | VARCHAR(64)  | Primary Key, format: `order_` + 16 alphanumeric characters |
-| merchant_id | UUID         | Required, Foreign Key → `merchants(id)`                    |
-| amount      | INTEGER      | Required, minimum `100` (smallest currency unit)           |
-| currency    | CHAR(3)      | Defaults to `INR`                                          |
-| receipt     | VARCHAR(255) | Optional                                                   |
-| notes       | JSON         | Optional                                                   |
-| status      | VARCHAR(20)  | Defaults to `created`                                      |
-| created_at  | TIMESTAMP    | Auto-set to current time                                   |
-| updated_at  | TIMESTAMP    | Auto-set to current time                                   |
-
----
-
-## Payments Table
-
-Stores payment transactions associated with orders.
-
-### Table: `payments`
-
-| Column            | Type         | Constraints                                                                |
-| ----------------- | ------------ | -------------------------------------------------------------------------- |
-| id                | VARCHAR(64)  | Primary Key, format: `pay_` + 16 alphanumeric characters                   |
-| order_id          | VARCHAR(64)  | Required, Foreign Key → `orders(id)`                                       |
-| merchant_id       | UUID         | Required, Foreign Key → `merchants(id)`                                    |
-| amount            | INTEGER      | Required (smallest currency unit)                                          |
-| currency          | CHAR(3)      | Defaults to `INR`                                                          |
-| method            | VARCHAR(20)  | Required (`upi`, `card`)                                                   |
-| status            | VARCHAR(20)  | Defaults to `created` (must be set to `processing` immediately)            |
-| vpa               | VARCHAR(255) | Optional, **UPI only**                                                     |
-| card_network      | VARCHAR(20)  | Optional, **Card only** (`visa`, `mastercard`, `amex`, `rupay`, `unknown`) |
-| card_last4        | CHAR(4)      | Optional, **Card only**                                                    |
-| error_code        | VARCHAR(50)  | Optional                                                                   |
-| error_description | TEXT         | Optional                                                                   |
-| created_at        | TIMESTAMP    | Auto-set to current time                                                   |
-| updated_at        | TIMESTAMP    | Auto-set to current time                                                   |
-
----
+- `id` varchar(64) primary key, constrained to `pay_` + 16 alphanumeric
+- `order_id` varchar(64) not null, FK → `orders(id)`
+- `merchant_id` UUID not null, FK → `merchants(id)`
+- `amount` integer not null
+- `currency` varchar(3) default `INR`
+- `method` varchar(20) not null, check in (`upi`, `card`)
+- `status` varchar(20) default `processing`
+- `vpa` varchar(255) nullable
+- `card_network` varchar(20) nullable
+- `card_last4` varchar(4) nullable
+- `error_code` varchar(50) nullable
+- `error_description` text nullable
+- `created_at`, `updated_at` timestamp default current time
 
 ## Required Indexes
 
-The following indexes **must be created** for performance:
+- `idx_orders_merchant_id` on `orders(merchant_id)`
+- `idx_payments_order_id` on `payments(order_id)`
+- `idx_payments_status` on `payments(status)`
 
-* Index on `orders.merchant_id`
-* Index on `payments.order_id`
-* Index on `payments.status`
+## Seed Data
 
----
+Application startup seeds test merchant if absent:
 
-## Database Seeding Requirement
+- `id`: `550e8400-e29b-41d4-a716-446655440000`
+- `name`: `Test Merchant`
+- `email`: `test@example.com`
+- `api_key`: `key_test_abc123`
+- `api_secret`: `secret_test_xyz789`
 
-On **application startup**, the system must automatically create a test merchant with the following **exact credentials**:
-
-### Test Merchant Record
-
-| Field      | Value                                  |
-| ---------- | -------------------------------------- |
-| id         | `550e8400-e29b-41d4-a716-446655440000` |
-| name       | `Test Merchant`                        |
-| email      | `test@example.com`                     |
-| api_key    | `key_test_abc123`                      |
-| api_secret | `secret_test_xyz789`                   |
-| created_at | Current timestamp at startup           |
-
-### Seeding Rules
-
-* If a merchant with email `test@example.com` **already exists**, skip insertion
-* Handle duplicates gracefully (no startup failure)
-* The test merchant **must be available immediately after application startup**
-* Required for automated testing and evaluation
-
----
-
-## Implementation Notes
-
-* Enforce all foreign key relationships at the database level
-* Enforce uniqueness constraints on `merchants.email` and `merchants.api_key`
-* Use proper timestamp defaults (`NOW()` / `CURRENT_TIMESTAMP`)
-* JSON type should support structured metadata storage
-
----
-
-
+This is implemented in backend startup sequence after schema initialization.

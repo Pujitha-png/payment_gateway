@@ -1,280 +1,124 @@
-# Payment Gateway Platform
+# Payment Gateway
 
-A full-stack, containerized **payment gateway system** built with a microservices-style architecture. This project includes a backend API, two frontend applications (Dashboard & Checkout), and supporting infrastructure (PostgreSQL & Redis), all orchestrated using **Docker Compose**.
+A Dockerized payment gateway platform with:
+- Backend API (`backend`) on port `8000`
+- Merchant Dashboard (`frontend/dashboard-vite`) on port `3000`
+- Hosted Checkout (`checkout-page`) on port `3001`
+- PostgreSQL (`postgres`) for persistence
 
----
+## Quick Start
 
-## 📌 Table of Contents
-
-* [Features](#-features)
-* [Architecture](#-architecture)
-* [Tech Stack](#-tech-stack)
-* [Project Structure](#-project-structure)
-* [Prerequisites](#-prerequisites)
-* [Environment Variables](#-environment-variables)
-* [Getting Started](#-getting-started)
-* [Evaluation Note](#-evaluation-note)
-* [Running with Docker](#-running-with-docker)
-* [Available Services & Ports](#-available-services--ports)
-* [Common Docker Commands](#-common-docker-commands)
-* [Troubleshooting](#-troubleshooting)
-* [Security Notes](#-security-notes)
-* [Documentation](#-documentation)
-* [Future Improvements](#-future-improvements)
-* [Contributing](#-contributing)
-* [License](#-license)
-
----
-
-## ✨ Features
-
-* Modular payment gateway architecture
-* Node.js backend API
-* Checkout frontend for user payments
-* Dashboard frontend for admin & monitoring
-* PostgreSQL for persistent storage
-* Redis for caching & sessions
-* Docker Compose for local development
-* Production-aligned container networking
-
----
-
-## 🏗 Architecture
-
-The system follows a **service-oriented architecture**:
-
-* **Backend API** handles business logic and payment processing
-* **Checkout UI** allows users to initiate payments
-* **Dashboard UI** provides transaction monitoring
-* **PostgreSQL** stores transactional data
-* **Redis** provides caching and session storage
-
-For a detailed explanation, see [`docs/architecture.md`](./docs/architecture.md).
-
----
-
-## 🧰 Tech Stack
-
-### Backend
-
-* Node.js (v20)
-* Express / Fastify (assumed)
-* PostgreSQL
-* Redis
-
-### Frontend
-
-* React
-* Vite
-
-### Infrastructure
-
-* Docker
-* Docker Compose
-* PostgreSQL 15 (Alpine)
-* Redis (latest)
-
----
-
-## 📁 Project Structure
-
-```
-payment-gateway/
-│
-├── backend/                  # Backend API service
-│   ├── src/
-│   ├── package.json
-│   ├── Dockerfile
-│   └── .env
-│
-├── checkout/                 # Checkout frontend
-│   ├── src/
-│   ├── package.json
-│   └── Dockerfile
-│
-├── frontend/
-│   └── dashboard-vite/       # Dashboard frontend
-│       ├── src/
-│       ├── package.json
-│       └── Dockerfile
-│
-├── docker-compose.yml
-├── docs/                     # Documentation files
-│   ├── architecture.md
-│   ├── database.md
-│   └── api.md
-├── README.md
-└── .gitignore
-```
-
----
-
-## ⚙️ Prerequisites
-
-Make sure you have the following installed:
-
-* Docker (v24+ recommended)
-* Docker Compose (v2)
-* Git
-
-Optional (for local development without Docker):
-
-* Node.js v20+
-* npm
-
----
-
-## 🔐 Environment Variables
-
-### Backend (`backend/.env`)
-
-```env
-PORT=8000
-NODE_ENV=development
-
-DB_HOST=postgres
-DB_PORT=5432
-DB_NAME=payment_gateway
-DB_USER=gateway_user
-DB_PASSWORD=gateway_pass
-
-REDIS_HOST=redis
-REDIS_PORT=6379
-```
-
-## 🚀 Getting Started
-
-Clone the repository:
+1. From project root:
 
 ```bash
-git clone https://github.com/Pujitha-png/payment-gateway.git
-cd payment-gateway
+docker compose up -d --build
 ```
 
----
-
-## After cloning run
+2. Check services:
 
 ```bash
-docker compose up -d
-```
-
-Ensure that:
-
-* All services start without errors
-* The seeded test merchant is available immediately
-* APIs and frontends are accessible on the specified ports
-
-All **documentation** (API, Database, Architecture) can be found in the [`docs/`](./docs) folder.
-
----
-
-## 🐳 Running with Docker
-
-### Build and start all services
-
-```bash
-docker compose up --build
-```
-
-### Run in detached mode
-
-```bash
-docker compose up --build -d
-```
-
-### Stop all services
-
-```bash
-docker compose down
-```
-
----
-
-## 🌐 Available Services & Ports
-
-| Service     | URL / Port                                     |
-| ----------- | ---------------------------------------------- |
-| Backend API | [http://localhost:8000](http://localhost:8000) |
-| Dashboard   | [http://localhost:3000](http://localhost:3000) |
-| Checkout    | [http://localhost:3001](http://localhost:3001) |
-| PostgreSQL  | localhost:5432                                 |
-| Redis       | Internal only                                  |
-
----
-
-## 🧪 Common Docker Commands
-
-```bash
-# View running containers
 docker compose ps
-
-# View logs for backend
-docker compose logs -f backend
-
-# Rebuild containers
-docker compose build
-
-# Remove unused containers
-docker container prune
 ```
 
----
+3. Health check:
 
-## 🛠 Troubleshooting
+- `http://localhost:8000/health`
 
-### Port already allocated
+## Service URLs
 
-If you see errors like:
+- Dashboard Login: `http://localhost:3000/login`
+- Dashboard Home: `http://localhost:3000/dashboard`
+- Transactions: `http://localhost:3000/dashboard/transactions`
+- Checkout: `http://localhost:3001/checkout?order_id=<ORDER_ID>`
+- API Health: `http://localhost:8000/health`
+- Test Merchant: `http://localhost:8000/api/v1/test/merchant`
 
+## Test Merchant Credentials
+
+Auto-seeded at startup:
+- Merchant ID: `550e8400-e29b-41d4-a716-446655440000`
+- Email: `test@example.com`
+- API Key: `key_test_abc123`
+- API Secret: `secret_test_xyz789`
+
+## Create an Order (to get `order_id`)
+
+Use Postman or curl:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/orders \
+  -H "X-Api-Key: key_test_abc123" \
+  -H "X-Api-Secret: secret_test_xyz789" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "amount": 50000,
+    "currency": "INR",
+    "receipt": "receipt_123",
+    "notes": {"customer_name": "John Doe"}
+  }'
 ```
-Bind for 0.0.0.0:6379 failed
+
+Response contains:
+- `id` in format `order_XXXXXXXXXXXXXXXX`
+
+Then open checkout:
+- `http://localhost:3001/checkout?order_id=<that_id>`
+
+## Payment Testing Inputs
+
+### UPI
+- Example VPA: `user@paytm`
+
+### Card
+- Number: `4111111111111111`
+- Expiry: any future value (e.g. `12/30`)
+- CVV: `123`
+- Name: `John Doe`
+
+By default outcomes are simulated:
+- UPI success rate: `90%`
+- Card success rate: `95%`
+
+## Deterministic Test Mode
+
+Configured in `docker-compose.yml` via environment values:
+- `TEST_MODE`
+- `TEST_PAYMENT_SUCCESS`
+- `TEST_PROCESSING_DELAY`
+
+For deterministic success, set:
+- `TEST_MODE=true`
+- `TEST_PAYMENT_SUCCESS=true`
+
+## Project Structure
+
+```text
+payment-gateway/
+├── docker-compose.yml
+├── .env.example
+├── backend/
+│   ├── Dockerfile
+│   ├── db.js
+│   ├── index.js
+│   ├── schema.js
+│   ├── routes/
+│   │   ├── health.js
+│   │   ├── orders.js
+│   │   ├── payments.js
+│   │   └── test.js
+│   └── utils/
+├── frontend/
+│   ├── Dockerfile
+│   └── dashboard-vite/
+├── checkout-page/
+└── docs/
+    ├── Api.md
+    ├── Architecture.md
+    └── database.md
 ```
 
-* Stop other services using the same port
-* Or remove Redis port exposure from compose file
+## Documentation
 
-## 🔒 Security Notes
-
-* Redis is not exposed publicly
-* Secrets should be stored in `.env` files
-* Use HTTPS in production via a reverse proxy
-* Consider secret managers for production
-
----
-
-## 📚 Documentation
-
-All API, database schema, and architecture references are located in the [`docs/`](./docs) folder:
-
-* [`docs/api.md`](./docs/api.md)
-* [`docs/database.md`](./docs/database.md)
-* [`docs/architecture.md`](./docs/architecture.md)
-
----
-
-## 🔮 Future Improvements
-
-* Authentication & authorization
-* API Gateway / Reverse proxy (NGINX / Traefik)
-* Webhooks for payment events
-* Message queues (Kafka / RabbitMQ)
-* Observability (Prometheus, Grafana)
-* CI/CD pipelines
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome!
-
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Open a Pull Request
-
----
-
-## ✅ Summary
-
-This repository provides a **clean, extensible payment gateway platform** with a modern Docker-based setup, suitable for learning, development, and future production use.
+- API reference: `docs/Api.md`
+- Architecture: `docs/Architecture.md`
+- Database schema: `docs/database.md`

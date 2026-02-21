@@ -1,247 +1,39 @@
-# Payment Gateway – System Architecture
+# Architecture
 
-## Overview
+## Runtime Services (`docker-compose.yml`)
 
-This project is a **containerized payment gateway platform** composed of multiple services orchestrated using **Docker Compose**. The architecture follows a **microservices-style separation of concerns**, with independent services for backend processing, frontend applications, and supporting infrastructure.
+- `postgres` (PostgreSQL 15) → `localhost:5432`
+- `api` (Node.js backend) → `localhost:8000`
+- `dashboard` (React+Vite via Nginx) → `localhost:3000`
+- `checkout` (React+Vite via Nginx) → `localhost:3001`
 
-The system is designed to be:
+## High-Level Flow
 
-* Modular
-* Scalable
-* Easy to run locally
-* Production-aligned (internal networking, service isolation)
+1. Merchant uses Dashboard (`3000`) to view credentials and transactions.
+2. Merchant creates orders using authenticated API calls (`8000`).
+3. Customer opens hosted checkout (`3001/checkout?order_id=...`).
+4. Checkout calls public order/payment endpoints on API.
+5. API persists entities in PostgreSQL and simulates payment processing.
 
----
+## API and UI Separation
 
-## High-Level Architecture
+- Dashboard uses authenticated merchant endpoints.
+- Checkout uses public endpoints (`/orders/:id/public`, `/payments/public`, `/payments/:id/public`).
 
-```
-┌──────────────────────┐
-│   Dashboard (UI)     │
-│  React / Vite        │
-│  Port: 3000          │
-└──────────┬───────────┘
-           │ HTTP
-┌──────────▼───────────┐
-│   Checkout (UI)      │
-│  React / Vite        │
-│  Port: 3001          │
-└──────────┬───────────┘
-           │ HTTP
-┌──────────▼───────────┐
-│     Backend API      │
-│  Node.js / Express   │
-│  Port: 8000          │
-└───────┬───────┬──────┘
-        │       │
-   SQL  │       │ Cache
-        │       │
-┌───────▼───┐  ┌▼────────┐
-│ PostgreSQL│  │  Redis   │
-│ Port 5432 │  │ Port 6379│
-└───────────┘  └──────────┘
-```
+## Startup and Dependency Order
 
----
+- `api` waits for healthy `postgres` using compose healthcheck condition.
+- `dashboard` and `checkout` depend on `api`.
 
-## Services
+## Seeded Merchant
 
-### 1. Backend Service
+Backend startup ensures test merchant exists:
+- `id`: `550e8400-e29b-41d4-a716-446655440000`
+- `email`: `test@example.com`
+- `api_key`: `key_test_abc123`
+- `api_secret`: `secret_test_xyz789`
 
-**Service Name:** `backend`
-**Container Name:** `backend_gateway`
+## Notes
 
-**Responsibilities:**
-
-* Payment processing logic
-* Order creation & validation
-* Communication with database and cache
-* Exposes REST APIs for frontend services
-
-**Technology:**
-
-* Node.js (v20)
-* Express / Fastify (assumed)
-
-**Internal Dependencies:**
-
-* PostgreSQL
-* Redis
-
-**Networking:**
-
-* Exposed to host on port `8000`
-* Communicates with other services via Docker internal DNS
-
----
-
-### 2. Checkout Frontend
-
-**Service Name:** `checkout`
-**Container Name:** `checkout_gateway`
-
-**Responsibilities:**
-
-* User payment initiation
-* Collect payment details
-* Call backend payment APIs
-
-**Technology:**
-
-* React
-* Vite
-
-**Networking:**
-
-* Exposed on port `3001`
-* Communicates only with backend service
-
----
-
-### 3. Dashboard Frontend
-
-**Service Name:** `dashboard`
-**Container Name:** `dashboard_gateway`
-
-**Responsibilities:**
-
-* Admin view of transactions
-* Payment monitoring
-* Reporting and analytics
-
-**Technology:**
-
-* React
-* Vite
-
-**Networking:**
-
-* Exposed on port `3000`
-* Communicates only with backend service
-
----
-
-### 4. PostgreSQL Database
-
-**Service Name:** `postgres`
-**Container Name:** `pg_gateway`
-
-**Responsibilities:**
-
-* Persistent storage of:
-
-  * Payments
-  * Orders
-  * Users
-  * Transactions
-
-**Technology:**
-
-* PostgreSQL 15 (Alpine)
-
-**Persistence:**
-
-* Docker volume: `pg_data`
-
-**Networking:**
-
-* Internal Docker network
-* Exposed to host on port `5432` (optional for development)
-
----
-
-### 5. Redis Cache
-
-**Service Name:** `redis`
-**Container Name:** `redis_gateway`
-
-**Responsibilities:**
-
-* Caching frequently accessed data
-* Session/token storage
-* Rate limiting (future)
-
-**Technology:**
-
-* Redis (latest)
-
-**Networking:**
-
-* Internal Docker network
-* Not required to be exposed to host
-
----
-
-## Docker Networking
-
-* All services run on the **default Docker Compose network**
-* Services communicate using **service names as hostnames**
-
-Examples:
-
-* Backend → PostgreSQL: `postgres:5432`
-* Backend → Redis: `redis:6379`
-* Frontends → Backend: `http://backend:8000`
-
----
-
-## Environment Configuration
-
-Each service can use environment variables:
-
-* Backend:
-
-  * `DATABASE_URL`
-  * `REDIS_HOST`
-  * `REDIS_PORT`
-  * `NODE_ENV`
-
-Environment variables are loaded using `.env` files where applicable.
-
----
-
-## Data Flow Example (Payment)
-
-1. User initiates payment from **Checkout UI**
-2. Checkout calls **Backend API**
-3. Backend:
-
-   * Validates request
-   * Caches session data in Redis
-   * Stores transaction in PostgreSQL
-4. Backend responds with payment status
-5. Dashboard displays transaction status
-
----
-
-## Scalability Considerations
-
-* Backend can be horizontally scaled behind a load balancer
-* Redis supports clustering
-* PostgreSQL can be upgraded to managed DB or replica setup
-* Frontends are stateless and CDN-friendly
-
----
-
-## Security Considerations
-
-* Redis not exposed publicly
-* Internal-only Docker networking
-* Environment variables for secrets
-* HTTPS termination can be added via reverse proxy (NGINX / Traefik)
-
----
-
-## Future Improvements
-
-* API Gateway / Reverse Proxy
-* Authentication service
-* Message queue (Kafka / RabbitMQ)
-* Monitoring (Prometheus + Grafana)
-* CI/CD pipeline
-
----
-
-## Summary
-
-This architecture provides a **clean separation between UI, API, and infrastructure**, making the payment gateway reliable, scalable, and production-ready while remaining easy to run locally using Docker Compose.
+- Redis is not part of current compose/runtime.
+- Processing outcome can be deterministic with test env vars (`TEST_MODE`, `TEST_PAYMENT_SUCCESS`, `TEST_PROCESSING_DELAY`).

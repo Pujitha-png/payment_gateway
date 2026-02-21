@@ -4,6 +4,7 @@ require("dotenv").config();
 const cors = require("cors");
 
 const { pool, waitForDB } = require("./db");
+const { initializeSchema } = require("./schema");
 
 const healthRoutes = require("./routes/health");
 const ordersRoutes = require("./routes/orders");
@@ -79,8 +80,9 @@ const PORT = process.env.PORT || 8000;
 
 (async () => {
   try {
-    await waitForDB();          // ⬅️ WAIT FIRST
-    await seedTestMerchant();   // ⬅️ THEN SEED
+    await waitForDB();
+    await initializeSchema();
+    await seedTestMerchant();
 
     app.listen(PORT, () => {
       console.log(`🚀 Server running on http://localhost:${PORT}`);
