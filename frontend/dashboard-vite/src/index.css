@@ -232,6 +232,16 @@ a {
   min-width: 640px;
 }
 
+.code-block {
+  background: #111827;
+  color: #f9fafb;
+  border-radius: 8px;
+  padding: 12px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  font-size: 0.85rem;
+}
+
 .table th,
 .table td {
   border-bottom: 1px solid #e5e7eb;

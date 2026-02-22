@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:15-alpine
@@ -16,6 +14,17 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    container_name: redis_gateway
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
   api:
     build:
       context: ./backend
@@ -24,6 +33,7 @@ services:
       - "8000:8000"
     environment:
       DATABASE_URL: postgresql://gateway_user:gateway_pass@postgres:5432/payment_gateway
+      REDIS_URL: redis://redis:6379
       PORT: 8000
       TEST_MODE: ${TEST_MODE:-false}
       TEST_PAYMENT_SUCCESS: ${TEST_PAYMENT_SUCCESS:-true}
@@ -32,9 +42,52 @@ services:
       CARD_SUCCESS_RATE: ${CARD_SUCCESS_RATE:-0.95}
       PROCESSING_DELAY_MIN: ${PROCESSING_DELAY_MIN:-5000}
       PROCESSING_DELAY_MAX: ${PROCESSING_DELAY_MAX:-10000}
+      WEBHOOK_RETRY_INTERVALS_TEST: ${WEBHOOK_RETRY_INTERVALS_TEST:-false}
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8000/health',res=>process.exit(res.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.worker
+    container_name: gateway_worker
+    environment:
+      DATABASE_URL: postgresql://gateway_user:gateway_pass@postgres:5432/payment_gateway
+      REDIS_URL: redis://redis:6379
+      TEST_MODE: ${TEST_MODE:-false}
+      TEST_PAYMENT_SUCCESS: ${TEST_PAYMENT_SUCCESS:-true}
+      TEST_PROCESSING_DELAY: ${TEST_PROCESSING_DELAY:-1000}
+      UPI_SUCCESS_RATE: ${UPI_SUCCESS_RATE:-0.90}
+      CARD_SUCCESS_RATE: ${CARD_SUCCESS_RATE:-0.95}
+      PROCESSING_DELAY_MIN: ${PROCESSING_DELAY_MIN:-5000}
+      PROCESSING_DELAY_MAX: ${PROCESSING_DELAY_MAX:-10000}
+      WEBHOOK_RETRY_INTERVALS_TEST: ${WEBHOOK_RETRY_INTERVALS_TEST:-false}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+
+  webhook-receiver:
+    build:
+      context: ./test-merchant
+      dockerfile: Dockerfile
+    container_name: gateway_webhook_receiver
+    environment:
+      PORT: 4000
+      WEBHOOK_SECRET: whsec_test_abc123
+    ports:
+      - "4000:4000"
 
   dashboard:
     build:

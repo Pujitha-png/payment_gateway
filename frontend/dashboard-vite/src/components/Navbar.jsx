@@ -18,6 +18,10 @@ export default function Navbar({ app = "dashboard" }) {
 
       {isDashboard ? (
         <div className="navbar-actions">
+          <button onClick={() => navigate('/dashboard')} className="button-ghost">Home</button>
+          <button onClick={() => navigate('/dashboard/transactions')} className="button-ghost">Transactions</button>
+          <button onClick={() => navigate('/dashboard/webhooks')} className="button-ghost">Webhooks</button>
+          <button onClick={() => navigate('/dashboard/docs')} className="button-ghost">Docs</button>
           <span className="nav-user">{merchant.name || "Merchant"}</span>
           <button onClick={handleLogout} className="button-ghost">
             Logout

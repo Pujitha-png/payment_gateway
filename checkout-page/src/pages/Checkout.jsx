@@ -5,6 +5,7 @@ import { createPayment, getOrderPublic, getPayment } from "../api/api";
 export default function Checkout() {
   const [searchParams] = useSearchParams();
   const orderIdParam = searchParams.get("order_id");
+  const embedded = searchParams.get("embedded") === "true";
 
   const [order, setOrder] = useState(null);
   const [selectedMethod, setSelectedMethod] = useState("");
@@ -49,6 +50,11 @@ export default function Checkout() {
     setErrorMessage("");
   }
 
+  function sendMessageToParent(type, data) {
+    if (!embedded || window.parent === window) return;
+    window.parent.postMessage({ type, data }, "*");
+  }
+
   async function startPolling(paymentId) {
     pollRef.current = setInterval(async () => {
       try {
@@ -60,13 +66,16 @@ export default function Checkout() {
           setProcessing(false);
           setSuccessPaymentId(response.data.id);
           setErrorMessage("");
+          sendMessageToParent("payment_success", { paymentId: response.data.id, payment: response.data });
         }
         if (status === "failed") {
           clearInterval(pollRef.current);
           pollRef.current = null;
           setProcessing(false);
           setSuccessPaymentId("");
-          setErrorMessage(response.data.error_description || "Payment could not be processed");
+          const failureMessage = response.data.error_description || "Payment could not be processed";
+          setErrorMessage(failureMessage);
+          sendMessageToParent("payment_failed", { error: failureMessage, payment: response.data });
         }
       } catch (error) {
         clearInterval(pollRef.current);
@@ -74,6 +83,7 @@ export default function Checkout() {
         setProcessing(false);
         setSuccessPaymentId("");
         setErrorMessage("Payment could not be processed");
+        sendMessageToParent("payment_failed", { error: "Payment could not be processed" });
       }
     }, 2000);
   }
@@ -213,6 +223,16 @@ export default function Checkout() {
             Try Again
           </button>
         </div>
+
+        {embedded ? (
+          <button
+            type="button"
+            className="method-btn"
+            onClick={() => sendMessageToParent("close_modal", {})}
+          >
+            Close
+          </button>
+        ) : null}
       </div>
     </div>
   );

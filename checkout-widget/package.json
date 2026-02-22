@@ -1,0 +1,17 @@
+{
+  "name": "checkout-widget",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Embeddable payment gateway SDK bundle",
+  "main": "dist/checkout.js",
+  "scripts": {
+    "build": "webpack --mode production",
+    "build:dev": "webpack --mode development"
+  },
+  "devDependencies": {
+    "css-loader": "^7.1.2",
+    "style-loader": "^4.0.0",
+    "webpack": "^5.102.1",
+    "webpack-cli": "^6.0.1"
+  }
+}

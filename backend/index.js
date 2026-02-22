@@ -10,6 +10,8 @@ const healthRoutes = require("./routes/health");
 const ordersRoutes = require("./routes/orders");
 const paymentsRoutes = require("./routes/payments");
 const testRoutes = require("./routes/test");
+const refundsRoutes = require("./routes/refunds");
+const webhooksRoutes = require("./routes/webhooks");
 
 const app = express();
 
@@ -29,6 +31,7 @@ app.use(
       "Content-Type",
       "X-Api-Key",
       "X-Api-Secret",
+      "Idempotency-Key",
       "Authorization",
     ],
     credentials: true,
@@ -43,6 +46,8 @@ const seedTestMerchant = async () => {
   const email = "test@example.com";
   const api_key = "key_test_abc123";
   const api_secret = "secret_test_xyz789";
+  const webhook_secret = "whsec_test_abc123";
+  const webhook_url = "http://webhook-receiver:4000/webhook";
 
   const res = await pool.query(
     "SELECT 1 FROM merchants WHERE email = $1",
@@ -53,14 +58,22 @@ const seedTestMerchant = async () => {
     await pool.query(
       `
       INSERT INTO merchants
-        (id, name, email, api_key, api_secret, is_active, created_at, updated_at)
+        (id, name, email, api_key, api_secret, webhook_url, webhook_secret, is_active, created_at, updated_at)
       VALUES
-        ($1, $2, $3, $4, $5, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ($1, $2, $3, $4, $5, $6, $7, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       `,
-      [id, "Test Merchant", email, api_key, api_secret]
+      [id, "Test Merchant", email, api_key, api_secret, webhook_url, webhook_secret]
     );
     console.log("✅ Test merchant created");
   } else {
+    await pool.query(
+      `UPDATE merchants
+       SET webhook_secret = COALESCE(webhook_secret, $1),
+           webhook_url = COALESCE(webhook_url, $2),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE email = $3`,
+      [webhook_secret, webhook_url, email]
+    );
     console.log("ℹ️ Test merchant already exists");
   }
 };
@@ -71,6 +84,8 @@ const seedTestMerchant = async () => {
 app.use("/health", healthRoutes);
 app.use("/api/v1/orders", ordersRoutes);
 app.use("/api/v1/payments", paymentsRoutes);
+app.use("/api/v1/refunds", refundsRoutes);
+app.use("/api/v1/webhooks", webhooksRoutes);
 app.use("/api/v1/test", testRoutes);
 
 /* ==============================

@@ -17,6 +17,8 @@ A full-stack payment gateway demo with merchant APIs, dashboard, and hosted chec
 - [Test Merchant Credentials](#test-merchant-credentials)
 - [Configuration](#configuration)
 - [Validation and Payment Simulation](#validation-and-payment-simulation)
+- [Deliverable 2 Features](#deliverable-2-features)
+- [Embeddable SDK](#embeddable-sdk)
 - [API Authentication](#api-authentication)
 - [Troubleshooting](#troubleshooting)
 - [Documentation](#documentation)
@@ -29,11 +31,15 @@ This project simulates a modern payment system where:
 - payment status is polled and finalized asynchronously,
 - data is stored in PostgreSQL.
 
-The repo includes a backend API, merchant dashboard, and checkout frontend, all orchestrated via Docker Compose.
+The repo includes a backend API, worker service, merchant dashboard, hosted checkout, and test webhook receiver, all orchestrated via Docker Compose.
 
 ## Core Features
 
 - Merchant order creation and payment retrieval APIs.
+- Async payment/refund processing through Redis queues + worker.
+- Webhook delivery with HMAC-SHA256 signatures and retry scheduling.
+- Idempotent payment creation with `Idempotency-Key` support.
+- Full and partial refund APIs with async processing.
 - Hosted public checkout flow (`order -> pay -> processing -> success/failed`).
 - UPI and Card payment methods.
 - Input validation (VPA format, Luhn card validation, expiry validation).
@@ -46,7 +52,10 @@ The repo includes a backend API, merchant dashboard, and checkout frontend, all 
 Runtime services in `docker-compose.yml`:
 
 - `postgres` (PostgreSQL) on `5432`
+- `redis` (BullMQ backing store) on `6379`
 - `api` (Node.js backend) on `8000`
+- `worker` (BullMQ workers for payment/refund/webhook jobs)
+- `webhook-receiver` (test merchant receiver) on `4000`
 - `dashboard` (React + Nginx) on `3000`
 - `checkout` (React + Nginx) on `3001`
 
@@ -55,7 +64,8 @@ High-level flow:
 2. Merchant creates an order via authenticated endpoint.
 3. Customer opens checkout with `order_id`.
 4. Checkout uses public endpoints to create and poll payment status.
-5. API persists/updates records in PostgreSQL.
+5. API enqueues background jobs and returns immediately.
+6. Worker updates final state and delivers merchant webhooks.
 
 ## Tech Stack
 
@@ -228,6 +238,7 @@ Seeded automatically on startup:
 Environment variables used by backend (via compose):
 
 - `DATABASE_URL`
+- `REDIS_URL`
 - `PORT`
 - `TEST_MODE`
 - `TEST_PAYMENT_SUCCESS`
@@ -236,6 +247,7 @@ Environment variables used by backend (via compose):
 - `CARD_SUCCESS_RATE`
 - `PROCESSING_DELAY_MIN`
 - `PROCESSING_DELAY_MAX`
+- `WEBHOOK_RETRY_INTERVALS_TEST`
 
 Use deterministic test success:
 
@@ -254,6 +266,21 @@ Use deterministic test failure:
 - Card expiry: current/future month check.
 - Card network detection: Visa/Mastercard/Amex/RuPay/Unknown.
 - Processing: async finalize with configurable delay and success probabilities.
+
+## Deliverable 2 Features
+
+- Payment jobs are enqueued on create and processed asynchronously.
+- Webhook events emitted: `payment.created`, `payment.pending`, `payment.success`, `payment.failed`, `refund.created`, `refund.processed`.
+- Webhook retries are persisted in DB (`webhook_logs`) and scheduled with backoff.
+- Refund processing is async with available-amount checks across pending + processed refunds.
+- Job queue visibility endpoint: `GET /api/v1/test/jobs/status`.
+
+## Embeddable SDK
+
+- SDK source/build scaffold lives in `checkout-widget/`.
+- Bundle target is `checkout-widget/dist/checkout.js` (UMD/global `window.PaymentGateway`).
+- Hosted script served for local integration at `http://localhost:3001/checkout.js`.
+- Security note: postMessage uses `*` origin for local project simplicity; in production validate `event.origin`.
 
 ## API Authentication
 

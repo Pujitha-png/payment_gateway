@@ -5,12 +5,14 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "worker": "node worker.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "bullmq": "^5.58.7",
     "body-parser": "^2.2.1",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",

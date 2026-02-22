@@ -16,5 +16,10 @@ API.interceptors.request.use(config => {
 export const getTestMerchant = () => axios.get(`${API_BASE}/test/merchant`);
 export const getOrder = (orderId) => API.get(`/orders/${orderId}`);
 export const getPayments = () => API.get(`/payments`);
+export const getWebhookConfig = () => API.get('/webhooks/config');
+export const saveWebhookConfig = (payload) => API.put('/webhooks/config', payload);
+export const sendTestWebhook = () => API.post('/webhooks/test');
+export const getWebhookLogs = (limit = 10, offset = 0) => API.get(`/webhooks?limit=${limit}&offset=${offset}`);
+export const retryWebhook = (webhookId) => API.post(`/webhooks/${webhookId}/retry`);
 
 export default API;
